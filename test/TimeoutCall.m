@@ -56,5 +56,36 @@ assert success;
 assert output[1] eq 9;
 print "  PASSED";
 
+// Test 6: HardKill on a fast call returns its result
+print "Test 6: HardKill, fast call";
+success, output, elapsed := TimeoutCall(5, fast_func, <6>, 1 : HardKill:=true);
+assert success;
+assert output[1] eq 36;
+print "  PASSED";
+
+// Test 7: HardKill bounds a call stuck in an uninterruptible C builtin, which the
+// child's own Alarm cannot interrupt (ShortVectors runs for minutes here)
+print "Test 7: HardKill, uninterruptible builtin";
+function stuck_func(x)
+  return #ShortVectors(Lattice("Lambda", 24), 12);
+end function;
+t0 := Realtime();
+success, output, elapsed := TimeoutCall(1, stuck_func, <0>, 1 : Buffer:=0, HardKill:=true);
+assert not success;
+assert Realtime(t0) lt 15;   // watchdog deadline is timeout + 2*Buffer + 2 = 3s
+print "  PASSED";
+
+// Test 8: HardKill overhead.  The watchdog belongs to the compute child, so the parent
+// does not wait for it; an earlier version cost ~140ms per call this way.
+print "Test 8: HardKill overhead";
+N := 20;
+t0 := Realtime();
+for i in [1..N] do
+  success, output, elapsed := TimeoutCall(5, fast_func, <i>, 1 : HardKill:=true);
+  assert success and output[1] eq i^2;
+end for;
+printf "  %o ms per HardKill call\n", Round(1000*Realtime(t0)/N);
+print "  PASSED";
+
 print "";
 print "All tests passed!";
